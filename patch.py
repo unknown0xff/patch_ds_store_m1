@@ -1,10 +1,21 @@
-import lldb
+#!/usr/bin/env python
+import os
+import sys
 import subprocess
 
 def runCommand(command):
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     out, err = p.communicate()
-    return out, err
+    return out.decode('utf-8'), err
+
+lldb_path, _ = runCommand('lldb -P')
+lldb_path = lldb_path.strip()
+sys.path.append(lldb_path)
+os.environ['PYTHONPATH'] = lldb_path
+
+runCommand("killall -STOP Finder")
+
+import lldb
 
 def getProcessList():
     out, err = runCommand("ps -A -o pid,command")
@@ -16,7 +27,7 @@ def getProcessList():
 def getProcessID(processName):
     processList = getProcessList()
     for process in processList:
-        if processName in str(process[1]):
+        if processName in process[1]:
             return int(process[0])
     return 0
 
@@ -38,6 +49,8 @@ info = lldb.SBAttachInfo()
 info.SetProcessID(pid)
 
 process = target.Attach(info, err)
+process.SendAsyncInterrupt()
+
 print(process)
 
 code = [
@@ -46,8 +59,8 @@ code = [
 ]
 raw = b"".join(code)
 
-# inject dylib
-# process.LoadImage(lldb.SBFileSpec("debugHelper.dylib", False), lldb.SBError())
+def injectDylib(lib):
+    process.LoadImage(lldb.SBFileSpec(lib, False), lldb.SBError())
 
 modules = target.modules
 
@@ -63,4 +76,4 @@ for module in modules:
         process.WriteMemory(saddr, raw, err)
         print(err)
 
-#print(err)
+runCommand("killall -CONT Finder")
